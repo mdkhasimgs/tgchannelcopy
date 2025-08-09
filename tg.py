@@ -8,31 +8,31 @@ from telethon.tl.types import Channel, DocumentAttributeVideo
 import shutil
 
 # ========== CONFIG ==========
-phone_number = '+91 7026046541'
-api_id = 26894200
-api_hash = '834cfa6ec2b0a1931a27d52d28d8838e'
+phone_number = os.getenv("PHONE_NUMBER")
+api_id = int(os.getenv("API_ID"))
+api_hash = os.getenv("API_HASH")
 
-SOURCE_CHANNEL_USERNAME = 'ourcommunityforbd'
-DESTINATION_CHANNEL_USERNAME = 'shcommunityforbd'
+SOURCE_CHANNEL_USERNAME = os.getenv("SOURCE_CHANNEL_USERNAME")
+DESTINATION_CHANNEL_USERNAME = os.getenv("DESTINATION_CHANNEL_USERNAME")
 
-BOT_TOKEN = '7525682158:AAGZBfP-OzPvPZMsHZgG0o_B7t3H-3P3UtA'
-TARGET_USER_ID = '7598595878'
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+TARGET_USER_ID = os.getenv("TARGET_USER_ID")
 
 DOWNLOAD_DIR = 'temp_telegram_media'
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 # ============================
 
 
-# -------- Install FFmpeg if missing --------
 def ensure_ffmpeg():
+    """Install FFmpeg if missing."""
     if shutil.which("ffmpeg") and shutil.which("ffprobe"):
         print("✅ FFmpeg is already installed.")
         return
 
     print("⬇ Installing FFmpeg...")
     if sys.platform.startswith("linux"):
-        subprocess.run(["sudo", "apt-get", "update"], check=False)
-        subprocess.run(["sudo", "apt-get", "install", "-y", "ffmpeg"], check=False)
+        subprocess.run(["apt-get", "update"], check=False)
+        subprocess.run(["apt-get", "install", "-y", "ffmpeg"], check=False)
     elif sys.platform == "darwin":
         subprocess.run(["brew", "install", "ffmpeg"], check=False)
     elif sys.platform == "win32":
@@ -45,9 +45,8 @@ def ensure_ffmpeg():
     print("✅ FFmpeg installed.")
 
 
-# -------- Bot Message --------
 def send_bot_message(text: str):
-    """Send a message to the user via bot."""
+    """Send message to user via bot."""
     try:
         url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
         payload = {"chat_id": TARGET_USER_ID, "text": text}
@@ -60,20 +59,15 @@ def send_bot_message(text: str):
         print(f"  ❌ Error sending bot message: {e}")
 
 
-# -------- Audio Check --------
 def has_audio(file_path):
-    """Check if the video has an audio stream using ffprobe."""
-    cmd = [
-        "ffprobe", "-i", file_path, "-show_streams",
-        "-select_streams", "a", "-loglevel", "error"
-    ]
+    """Check if video has an audio stream."""
+    cmd = ["ffprobe", "-i", file_path, "-show_streams", "-select_streams", "a", "-loglevel", "error"]
     result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     return bool(result.stdout.strip())
 
 
-# -------- Add Silent Audio --------
 def add_silent_audio(input_path, output_path):
-    """Add a silent audio track to the video."""
+    """Add silent audio to video."""
     cmd = [
         "ffmpeg", "-i", input_path,
         "-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=44100",
@@ -83,9 +77,7 @@ def add_silent_audio(input_path, output_path):
     subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
-# -------- Main Function --------
 async def copy_posts_in_range(start_number: int, end_number: int):
-    """Copy posts from start_number to end_number from source to destination."""
     session_name = f"session_{phone_number.replace('+', '').replace(' ', '')}"
     client = TelegramClient(session_name, api_id, api_hash)
 
@@ -130,11 +122,7 @@ async def copy_posts_in_range(start_number: int, end_number: int):
                     file_path = await message.download_media(file=DOWNLOAD_DIR)
                     if file_path:
                         if message.photo:
-                            await client.send_file(
-                                destination_channel,
-                                file_path,
-                                caption=message.text or ""
-                            )
+                            await client.send_file(destination_channel, file_path, caption=message.text or "")
                             print("  Sent photo.")
                             sent_success = True
 
@@ -161,9 +149,6 @@ async def copy_posts_in_range(start_number: int, end_number: int):
                             )
                             print("  Sent as real video.")
                             sent_success = True
-
-                        else:
-                            print("  Unsupported media type, skipped.")
 
                 finally:
                     if file_path and os.path.exists(file_path):
