@@ -5,8 +5,9 @@ import sys
 import requests
 import shutil
 from telethon.sync import TelegramClient
-from telethon.tl.types import DocumentAttributeVideo
-from keep_alive import keep_alive  # Flask keep-alive
+from telethon.tl.types import Channel, DocumentAttributeVideo
+from flask import Flask
+import threading
 
 # ========== CONFIG ==========
 phone_number = '+91 7026046541'
@@ -24,31 +25,32 @@ os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 # ============================
 
 
-# -------- Check FFmpeg --------
+# -------- Install FFmpeg if missing --------
 def ensure_ffmpeg():
     if shutil.which("ffmpeg") and shutil.which("ffprobe"):
-        print("✅ FFmpeg is installed.")
-    else:
-        print("❌ FFmpeg not found. Install it in replit.nix.")
-        sys.exit(1)
+        print("✅ FFmpeg is already installed.")
+        return
+    print("⚠ FFmpeg not found. Please install it on your hosting environment.")
 
 
 # -------- Bot Message --------
 def send_bot_message(text: str):
+    """Send a message to the user via bot."""
     try:
         url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
         payload = {"chat_id": TARGET_USER_ID, "text": text}
         r = requests.post(url, json=payload)
         if r.status_code == 200:
-            print("  ✅ Sent link to user via bot.")
+            print(f"  ✅ Bot message sent: {text}")
         else:
-            print(f"  ❌ Failed to send link via bot: {r.text}")
+            print(f"  ❌ Failed to send bot message: {r.text}")
     except Exception as e:
         print(f"  ❌ Error sending bot message: {e}")
 
 
 # -------- Audio Check --------
 def has_audio(file_path):
+    """Check if the video has an audio stream using ffprobe."""
     cmd = [
         "ffprobe", "-i", file_path, "-show_streams",
         "-select_streams", "a", "-loglevel", "error"
@@ -59,6 +61,7 @@ def has_audio(file_path):
 
 # -------- Add Silent Audio --------
 def add_silent_audio(input_path, output_path):
+    """Add a silent audio track to the video."""
     cmd = [
         "ffmpeg", "-i", input_path,
         "-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=44100",
@@ -70,6 +73,7 @@ def add_silent_audio(input_path, output_path):
 
 # -------- Main Function --------
 async def copy_posts_in_range(start_number: int, end_number: int):
+    """Copy posts from start_number to end_number from source to destination."""
     session_name = f"session_{phone_number.replace('+', '').replace(' ', '')}"
     client = TelegramClient(session_name, api_id, api_hash)
 
@@ -167,9 +171,25 @@ async def copy_posts_in_range(start_number: int, end_number: int):
         await client.disconnect()
 
 
+# -------- Flask Keep-Alive --------
+app = Flask('')
+
+@app.route('/')
+def home():
+    send_bot_message("📡 Ping received from UptimeRobot!")
+    return "Alive"
+
+def run_flask():
+    app.run(host='0.0.0.0', port=8080)
+
+
 if __name__ == '__main__':
-    keep_alive()  # Start Flask keep-alive server
     ensure_ffmpeg()
+
+    # Start Flask server in background
+    threading.Thread(target=run_flask).start()
+
+    # Start Telegram copy process
     start_number = int(input("Enter the starting post number: ").replace("/", ""))
     end_number = int(input("Enter the ending post number: ").replace("/", ""))
     asyncio.run(copy_posts_in_range(start_number, end_number))
