@@ -1,13 +1,10 @@
 import os
 import asyncio
 import subprocess
-import sys
 import requests
-import shutil
 from telethon.sync import TelegramClient
 from telethon.tl.types import Channel, DocumentAttributeVideo
-from flask import Flask
-import threading
+import shutil
 
 # ========== CONFIG ==========
 phone_number = '+91 7026046541'
@@ -17,7 +14,7 @@ api_hash = '834cfa6ec2b0a1931a27d52d28d8838e'
 SOURCE_CHANNEL_USERNAME = 'ourcommunityforbd'
 DESTINATION_CHANNEL_USERNAME = 'shcommunityforbd'
 
-BOT_TOKEN = '7525682158:AAGZBfP-OzPvPZMsHZgG0o_B7t3H-3P3UtA'
+BOT_TOKEN = '7525682158:AAGZBfP-OzPvZMsHZgG0o_B7t3H-3P3UtA'
 TARGET_USER_ID = '7598595878'
 
 DOWNLOAD_DIR = 'temp_telegram_media'
@@ -25,12 +22,14 @@ os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 # ============================
 
 
-# -------- Install FFmpeg if missing --------
-def ensure_ffmpeg():
+# -------- Simple ffmpeg check --------
+def check_ffmpeg():
     if shutil.which("ffmpeg") and shutil.which("ffprobe"):
-        print("✅ FFmpeg is already installed.")
-        return
-    print("⚠ FFmpeg not found. Please install it on your hosting environment.")
+        print("✅ FFmpeg is installed and ready.")
+        return True
+    else:
+        print("⚠ FFmpeg is NOT installed or not found in PATH. Please ensure ffmpeg is installed.")
+        return False
 
 
 # -------- Bot Message --------
@@ -41,9 +40,9 @@ def send_bot_message(text: str):
         payload = {"chat_id": TARGET_USER_ID, "text": text}
         r = requests.post(url, json=payload)
         if r.status_code == 200:
-            print(f"  ✅ Bot message sent: {text}")
+            print("  ✅ Sent link to user via bot.")
         else:
-            print(f"  ❌ Failed to send bot message: {r.text}")
+            print(f"  ❌ Failed to send link via bot: {r.text}")
     except Exception as e:
         print(f"  ❌ Error sending bot message: {e}")
 
@@ -171,25 +170,10 @@ async def copy_posts_in_range(start_number: int, end_number: int):
         await client.disconnect()
 
 
-# -------- Flask Keep-Alive --------
-app = Flask('')
-
-@app.route('/')
-def home():
-    send_bot_message("📡 Ping received from UptimeRobot!")
-    return "Alive"
-
-def run_flask():
-    app.run(host='0.0.0.0', port=8080)
-
-
 if __name__ == '__main__':
-    ensure_ffmpeg()
-
-    # Start Flask server in background
-    threading.Thread(target=run_flask).start()
-
-    # Start Telegram copy process
-    start_number = int(input("Enter the starting post number: ").replace("/", ""))
-    end_number = int(input("Enter the ending post number: ").replace("/", ""))
-    asyncio.run(copy_posts_in_range(start_number, end_number))
+    if check_ffmpeg():
+        start_number = int(input("Enter the starting post number: ").replace("/", ""))
+        end_number = int(input("Enter the ending post number: ").replace("/", ""))
+        asyncio.run(copy_posts_in_range(start_number, end_number))
+    else:
+        print("Please install ffmpeg and try again.")
